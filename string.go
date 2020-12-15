@@ -33,6 +33,8 @@ import (
 	perrors "github.com/pkg/errors"
 )
 
+var bp *BytePool = NewPool(1024 * 1024)
+
 /////////////////////////////////////////
 // String
 /////////////////////////////////////////
@@ -315,7 +317,8 @@ func (d *Decoder) decString(flag int32) (string, error) {
 		if err != nil {
 			return s, perrors.WithStack(err)
 		}
-		bytesBuf := make([]byte, chunkLen<<2)
+		bytesBuf := bp.Get(chunkLen << 2)
+		defer bp.Put(bytesBuf)
 		offset := 0
 
 		for {
@@ -344,7 +347,7 @@ func (d *Decoder) decString(flag int32) (string, error) {
 					remain, cap := len(bytesBuf)-offset, chunkLen<<2
 					if remain < cap {
 						grow := len(bytesBuf) + cap
-						bs := make([]byte, grow)
+						bs := bp.Get(grow)
 						copy(bs, bytesBuf)
 						bytesBuf = bs
 					}
