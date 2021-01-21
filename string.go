@@ -33,6 +33,8 @@ import (
 	perrors "github.com/pkg/errors"
 )
 
+var bp *BytePool = NewPool(1024 * 1024)
+
 /////////////////////////////////////////
 // String
 /////////////////////////////////////////
@@ -254,7 +256,7 @@ func (d *Decoder) decString(flag int32) (string, error) {
 		(tag == BC_STRING_CHUNK || tag == BC_STRING) {
 
 		if tag != BC_STRING_CHUNK {
-			data, err := d.readStringChunkData(tag)
+			data, err := d.readStringChunkData(tag, false)
 			if err != nil {
 				return "", err
 			}
@@ -265,7 +267,7 @@ func (d *Decoder) decString(flag int32) (string, error) {
 		dataLength := 0
 
 		for {
-			data, err := d.readStringChunkData(tag)
+			data, err := d.readStringChunkData(tag, true)
 			if err != nil {
 				return "", err
 			}
@@ -279,6 +281,7 @@ func (d *Decoder) decString(flag int32) (string, error) {
 				index := 0
 				for _, b := range chunkDataSlice {
 					copy(allData[index:], b)
+					bp.Put(b)
 					index += len(b)
 				}
 				return *(*string)(unsafe.Pointer(&allData)), nil
@@ -302,13 +305,18 @@ func (d *Decoder) decString(flag int32) (string, error) {
 }
 
 // readStringChunkData read one string chunk data as a utf8 buffer
-func (d *Decoder) readStringChunkData(tag byte) ([]byte, error) {
+func (d *Decoder) readStringChunkData(tag byte, usePool bool) ([]byte, error) {
 	charTotal, err := d.getStringLength(tag)
 	if err != nil {
 		return nil, perrors.WithStack(err)
 	}
 
-	data := make([]byte, charTotal*3)
+	var data []byte
+	if usePool {
+		data = bp.Get(charTotal * 3)
+	} else {
+		data = make([]byte, charTotal*3)
+	}
 
 	start := 0
 	end := 0
