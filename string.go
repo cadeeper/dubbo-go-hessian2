@@ -33,8 +33,6 @@ import (
 	perrors "github.com/pkg/errors"
 )
 
-var bp *BytePool = NewPool(1024 * 1024)
-
 /////////////////////////////////////////
 // String
 /////////////////////////////////////////
@@ -281,7 +279,7 @@ func (d *Decoder) decString(flag int32) (string, error) {
 				index := 0
 				for _, b := range chunkDataSlice {
 					copy(allData[index:], b)
-					bp.Put(b)
+					gxbytes.ReleaseBytes(&b)
 					index += len(b)
 				}
 				return *(*string)(unsafe.Pointer(&allData)), nil
@@ -305,15 +303,14 @@ func (d *Decoder) decString(flag int32) (string, error) {
 }
 
 // readStringChunkData read one string chunk data as a utf8 buffer
-func (d *Decoder) readStringChunkData(tag byte, usePool bool) ([]byte, error) {
+func (d *Decoder) readStringChunkData(tag byte, buf bool) ([]byte, error) {
 	charTotal, err := d.getStringLength(tag)
 	if err != nil {
 		return nil, perrors.WithStack(err)
 	}
-
 	var data []byte
-	if usePool {
-		data = bp.Get(charTotal * 3)
+	if buf {
+		data = *gxbytes.AcquireBytes(charTotal * 3)
 	} else {
 		data = make([]byte, charTotal*3)
 	}
